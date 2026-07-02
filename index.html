@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marrow Planner Pro</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <meta name="theme-color" content="#1e1e1e">
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-top">
+      <div class="brand-wrapper">
+        <button id="back-btn" class="back-btn" style="display: none;" aria-label="Back to Dashboard">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        </button>
+        <div class="brand" id="header-title">Marrow Planner</div>
+      </div>
+      <button id="theme-toggle" aria-label="Toggle Theme">
+        <!-- Moon Icon (for dark mode active) -->
+        <svg id="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <!-- Sun Icon (for light mode active) -->
+        <svg id="theme-icon-sun" style="display:none;" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+    </div>
+    <div class="header-stats">
+      <div class="total-wrapper">
+        <span class="total-label" id="header-total-label">Grand Total</span>
+        <div id="header-total-hours" class="total-value">0h 0m</div>
+      </div>
+      <div class="speed-control">
+        <label for="speed-select">Speed</label>
+        <select id="speed-select">
+          <option value="1">1x</option>
+          <option value="1.5">1.5x</option>
+          <option value="1.8">1.8x</option>
+          <option value="2">2x</option>
+        </select>
+      </div>
+    </div>
+  </header>
+  
+  <main class="app-main" id="app-main">
+    <!-- View containers will be injected by app.js -->
+  </main>
+
+  <div id="install-popup" class="install-popup" style="display: none;">
+    <div class="install-popup-content">
+      <div class="install-icon">
+        <img src="icon.svg" alt="App Icon" width="48" height="48">
+      </div>
+      <div class="install-text">
+        <h3>Install Marrow Planner</h3>
+        <p>Add to home screen for offline use and a native app experience.</p>
+      </div>
+      <div class="install-actions">
+        <button id="install-cancel" class="btn-cancel">Not Now</button>
+        <button id="install-confirm" class="btn-primary">Install</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(err => console.log('SW setup failed', err));
+      });
+    }
+  </script>
+</body>
+</html>
