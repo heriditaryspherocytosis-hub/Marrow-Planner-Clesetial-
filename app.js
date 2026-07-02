@@ -288,6 +288,70 @@ document.addEventListener('DOMContentLoaded', () => {
     updateThemeIcons();
   });
 
+  // --- Settings & Backup System ---
+  const settingsToggle = document.getElementById('settings-toggle');
+  const settingsDropdown = document.getElementById('settings-dropdown');
+  const btnExport = document.getElementById('btn-export');
+  const btnImportTrigger = document.getElementById('btn-import-trigger');
+  const btnImportFile = document.getElementById('btn-import-file');
+
+  settingsToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    settingsDropdown.classList.toggle('active');
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!settingsDropdown.contains(e.target) && !settingsToggle.contains(e.target)) {
+      settingsDropdown.classList.remove('active');
+    }
+  });
+
+  btnExport.addEventListener('click', () => {
+    const dataStr = JSON.stringify(userData, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    const date = new Date().toISOString().split('T')[0];
+    a.download = `marrow-planner-backup-${date}.json`;
+    document.body.appendChild(a);
+    a.click();
+    
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    settingsDropdown.classList.remove('active');
+  });
+
+  btnImportTrigger.addEventListener('click', () => {
+    btnImportFile.click();
+  });
+
+  btnImportFile.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const parsedData = JSON.parse(event.target.result);
+        
+        if (Array.isArray(parsedData) && parsedData.length > 0 && parsedData[0].subject) {
+          localStorage.setItem('marrowPlannerDataV2', JSON.stringify(parsedData));
+          alert('Backup restored successfully! The app will now reload.');
+          window.location.reload();
+        } else {
+          alert('Error: Invalid backup file structure.');
+        }
+      } catch (err) {
+        alert('Failed to read the backup file. Please ensure it is a valid JSON backup file.');
+        console.error(err);
+      }
+    };
+    reader.readAsText(file);
+    settingsDropdown.classList.remove('active');
+  });
+
   // --- Format Helpers ---
   function formatMinutes(totalMins) {
     const h = Math.floor(totalMins / 60);
@@ -303,12 +367,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Data Loading ---
   let userData = JSON.parse(localStorage.getItem('marrowPlannerDataV2'));
-  if (!userData) {
+  if (userData) {
+    // Migration for Pace Engine
+    userData.forEach(sub => {
+      if (!sub.paceMode) sub.paceMode = 'time';
+      if (typeof sub.targetDays === 'undefined') sub.targetDays = 10;
+    });
+  } else {
     userData = syllabusData.map((subject) => {
       return {
         subject: subject.subject,
         dailyGoalH: 2, 
         dailyGoalM: 0,
+        targetDays: 10,
+        paceMode: 'time',
         chapters: subject.chapters.map((ch) => {
           const hm = decimalToHM(ch.hours);
           return {
@@ -336,6 +408,7 @@ document.addEventListener('DOMContentLoaded', () => {
     headerTitle.textContent = 'Marrow Planner';
     headerTotalLabel.textContent = 'Grand Total';
     render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 
   function calculateSubjectTotals(sub) {
@@ -407,6 +480,7 @@ document.addEventListener('DOMContentLoaded', () => {
           headerTitle.textContent = sub.subject;
           headerTotalLabel.textContent = 'Subject Total';
           render();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
         });
 
         grid.appendChild(tile);
@@ -443,45 +517,100 @@ document.addEventListener('DOMContentLoaded', () => {
       focusedHeader.appendChild(fTitle);
       focusedHeader.appendChild(fProgress);
 
-      // Daily Goal Calculator
-      const goalCalc = document.createElement('div');
-      goalCalc.className = 'goal-calculator';
+      // Pace Engine
+      const paceEngine = document.createElement('div');
+      paceEngine.className = 'pace-engine';
       
-      const goalHeader = document.createElement('div');
-      goalHeader.className = 'goal-calculator-header';
-      goalHeader.innerHTML = `<span>Pace Target:</span> <span id="days-left-${sIdx}" class="goal-result">0 days</span>`;
-      
-      const goalInputs = document.createElement('div');
-      goalInputs.className = 'goal-inputs';
-      
-      const goalHInput = document.createElement('input');
-      goalHInput.type = 'number';
-      goalHInput.min = '0';
-      goalHInput.value = sub.dailyGoalH;
-      
-      const goalMInput = document.createElement('input');
-      goalMInput.type = 'number';
-      goalMInput.min = '0';
-      goalMInput.max = '59';
-      goalMInput.value = sub.dailyGoalM;
+      const pHeader = document.createElement('div');
+      pHeader.className = 'pace-engine-header';
+      pHeader.textContent = 'Two-Way Pace Engine';
 
-      const updateGoal = () => {
-        sub.dailyGoalH = parseInt(goalHInput.value) || 0;
-        sub.dailyGoalM = parseInt(goalMInput.value) || 0;
+      const pControls = document.createElement('div');
+      pControls.className = 'pace-controls';
+
+      // Daily Time Column
+      const colTime = document.createElement('div');
+      colTime.className = 'pace-column';
+      
+      const labelTime = document.createElement('div');
+      labelTime.className = `pace-label ${sub.paceMode === 'time' ? 'locked' : ''}`;
+      labelTime.innerHTML = `
+        Daily Time
+        <button class="lock-btn" id="lock-time-${sIdx}" title="Lock Daily Time">
+          ${sub.paceMode === 'time' ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C9.243 2 7 4.243 7 7v3H6c-1.103 0-2 .897-2 2v8c0 1.103.897 2 2 2h12c1.103 0 2-.897 2-2v-8c0-1.103-.897-2-2-2h-1V7c0-2.757-2.243-5-5-5zm-3 5c0-1.654 1.346-3 3-3s3 1.346 3 3v3H9V7z"/></svg>' : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>'}
+        </button>
+      `;
+
+      const inputRowTime = document.createElement('div');
+      inputRowTime.className = 'pace-input-row';
+      const goalHInput = document.createElement('input');
+      goalHInput.type = 'number'; goalHInput.min = '0'; goalHInput.value = sub.dailyGoalH;
+      goalHInput.id = `input-h-${sIdx}`;
+      const goalMInput = document.createElement('input');
+      goalMInput.type = 'number'; goalMInput.min = '0'; goalMInput.max = '59'; goalMInput.value = sub.dailyGoalM;
+      goalMInput.id = `input-m-${sIdx}`;
+      inputRowTime.append(goalHInput, 'h ', goalMInput, 'm');
+
+      colTime.append(labelTime, inputRowTime);
+
+      // Sync Icon
+      const syncIcon = document.createElement('div');
+      syncIcon.className = 'sync-icon';
+      syncIcon.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2.1l4 4-4 4"/><path d="M3 12.2v-2a4 4 0 0 1 4-4h12.8M7 21.9l-4-4 4-4"/><path d="M21 11.8v2a4 4 0 0 1-4 4H4.2"/></svg>';
+
+      // Target Days Column
+      const colDays = document.createElement('div');
+      colDays.className = 'pace-column';
+
+      const labelDays = document.createElement('div');
+      labelDays.className = `pace-label ${sub.paceMode === 'days' ? 'locked' : ''}`;
+      labelDays.innerHTML = `
+        Target Days
+        <button class="lock-btn" id="lock-days-${sIdx}" title="Lock Target Days">
+          ${sub.paceMode === 'days' ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C9.243 2 7 4.243 7 7v3H6c-1.103 0-2 .897-2 2v8c0 1.103.897 2 2 2h12c1.103 0 2-.897 2-2v-8c0-1.103-.897-2-2-2h-1V7c0-2.757-2.243-5-5-5zm-3 5c0-1.654 1.346-3 3-3s3 1.346 3 3v3H9V7z"/></svg>' : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>'}
+        </button>
+      `;
+
+      const inputRowDays = document.createElement('div');
+      inputRowDays.className = 'pace-input-row';
+      const daysInput = document.createElement('input');
+      daysInput.type = 'number'; daysInput.min = '0'; daysInput.step = '0.1'; daysInput.value = sub.targetDays;
+      daysInput.id = `input-d-${sIdx}`;
+      daysInput.style.width = '60px';
+      inputRowDays.append(daysInput, ' days');
+
+      colDays.append(labelDays, inputRowDays);
+      pControls.append(colTime, syncIcon, colDays);
+
+      // Calendar Estimation
+      const calEst = document.createElement('div');
+      calEst.className = 'calendar-estimate';
+      calEst.innerHTML = `Estimated Finish: <span class="calendar-date" id="cal-date-${sIdx}">-</span>`;
+
+      paceEngine.append(pHeader, pControls, calEst);
+
+      // Event Listeners for Pace Engine
+      const handlePaceChange = (source) => {
+        if (source === 'time') {
+          sub.paceMode = 'time';
+          sub.dailyGoalH = parseInt(goalHInput.value) || 0;
+          sub.dailyGoalM = parseInt(goalMInput.value) || 0;
+        } else if (source === 'days') {
+          sub.paceMode = 'days';
+          sub.targetDays = parseFloat(daysInput.value) || 0;
+        }
         saveData();
-        updateTotals();
+        render(); // Re-render to calculate the other side and update locks
       };
 
-      goalHInput.addEventListener('input', updateGoal);
-      goalMInput.addEventListener('input', updateGoal);
-
-      goalInputs.appendChild(goalHInput);
-      goalInputs.appendChild(document.createTextNode('h'));
-      goalInputs.appendChild(goalMInput);
-      goalInputs.appendChild(document.createTextNode('m'));
-
-      goalCalc.appendChild(goalHeader);
-      goalCalc.appendChild(goalInputs);
+      goalHInput.addEventListener('change', () => handlePaceChange('time'));
+      goalMInput.addEventListener('change', () => handlePaceChange('time'));
+      daysInput.addEventListener('change', () => handlePaceChange('days'));
+      
+      const lockTimeBtn = labelTime.querySelector('.lock-btn');
+      const lockDaysBtn = labelDays.querySelector('.lock-btn');
+      lockTimeBtn.addEventListener('click', () => handlePaceChange('time'));
+      lockDaysBtn.addEventListener('click', () => handlePaceChange('days'));
 
       // Chapter List
       const chaptersCard = document.createElement('div');
@@ -559,7 +688,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       viewWrapper.appendChild(focusedHeader);
-      viewWrapper.appendChild(goalCalc);
+      viewWrapper.appendChild(paceEngine);
       viewWrapper.appendChild(chaptersCard);
       container.appendChild(viewWrapper);
     }
@@ -605,20 +734,43 @@ document.addEventListener('DOMContentLoaded', () => {
       // Update Header with specific Subject Total instead of Grand Total
       grandTotalEl.textContent = formatMinutes(subTotalBaseMins / currentSpeed);
 
-      // Update Goal Calculator
-      const daysLeftEl = document.getElementById(`days-left-${activeView}`);
-      if (daysLeftEl) {
+      // Update Pace Engine
+      const inputH = document.getElementById(`input-h-${activeView}`);
+      const inputM = document.getElementById(`input-m-${activeView}`);
+      const inputD = document.getElementById(`input-d-${activeView}`);
+      const calDate = document.getElementById(`cal-date-${activeView}`);
+      
+      if (inputH && inputM && inputD && calDate) {
         const uncompletedBaseMins = subTotalBaseMins - completedBaseMins;
         const requiredWatchMins = uncompletedBaseMins / currentSpeed;
-        const dailyGoalMins = (sub.dailyGoalH * 60) + sub.dailyGoalM;
-        
-        if (dailyGoalMins > 0 && requiredWatchMins > 0) {
-          const days = (requiredWatchMins / dailyGoalMins).toFixed(1);
-          daysLeftEl.textContent = `${days} days`;
-        } else if (requiredWatchMins === 0) {
-          daysLeftEl.textContent = `Done!`;
+
+        if (sub.paceMode === 'time') {
+          const dailyGoalMins = (sub.dailyGoalH * 60) + sub.dailyGoalM;
+          if (dailyGoalMins > 0) {
+            sub.targetDays = parseFloat((requiredWatchMins / dailyGoalMins).toFixed(1));
+            inputD.value = sub.targetDays;
+          }
+        } else if (sub.paceMode === 'days') {
+          if (sub.targetDays > 0) {
+            const dailyReqMins = requiredWatchMins / sub.targetDays;
+            sub.dailyGoalH = Math.floor(dailyReqMins / 60);
+            sub.dailyGoalM = Math.round(dailyReqMins % 60);
+            inputH.value = sub.dailyGoalH;
+            inputM.value = sub.dailyGoalM;
+          }
+        }
+
+        if (requiredWatchMins <= 0) {
+          calDate.textContent = "Done! 🎉";
+          calDate.style.color = "var(--success-color)";
+        } else if (sub.targetDays > 0) {
+          const targetDate = new Date();
+          targetDate.setDate(targetDate.getDate() + Math.ceil(sub.targetDays));
+          calDate.textContent = targetDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+          calDate.style.color = "var(--primary-color)";
         } else {
-          daysLeftEl.textContent = `Set goal`;
+          calDate.textContent = "Set a pace to estimate";
+          calDate.style.color = "var(--text-secondary)";
         }
       }
     }
